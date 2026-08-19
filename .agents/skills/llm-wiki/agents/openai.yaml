@@ -1,0 +1,7 @@
+interface:
+  display_name: "LLM Wiki"
+  short_description: "Maintain an evidence-linked file wiki"
+  default_prompt: "Use $llm-wiki to ingest the selected sources and update the persistent wiki."
+
+policy:
+  allow_implicit_invocation: true

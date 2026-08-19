@@ -1,0 +1,7 @@
+interface:
+  display_name: "Wiki PDF Source"
+  short_description: "Extract PDF evidence with page provenance"
+  default_prompt: "Use $wiki-pdf-source to extract this PDF for the file-based wiki."
+
+policy:
+  allow_implicit_invocation: true

@@ -1,0 +1,48 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "llm-wiki"
+version = "0.2.0"
+description = "A file-first agent skill for maintaining a persistent, evidence-linked LLM wiki."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.12"
+authors = [{ name = "LLM Wiki contributors" }]
+dependencies = []
+
+[project.optional-dependencies]
+converters = [
+  "openpyxl>=3.1,<4",
+  "pypdf>=5.9,<6",
+  "python-docx>=1.2,<2",
+  "python-pptx>=1.0,<2",
+]
+dev = [
+  "mypy>=1.17,<2",
+  "pytest>=8.4,<9",
+  "pytest-cov>=6.2,<7",
+  "ruff>=0.12,<1",
+]
+
+[project.scripts]
+llm-wiki = "llm_wiki.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/llm_wiki"]
+
+[tool.pytest.ini_options]
+addopts = "-q --cov=llm_wiki --cov-report=term-missing"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true

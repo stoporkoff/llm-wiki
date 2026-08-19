@@ -1,0 +1,7 @@
+interface:
+  display_name: "Wiki Office Source"
+  short_description: "Extract DOCX and PPTX evidence safely"
+  default_prompt: "Use $wiki-office-source to extract this Office file for the wiki."
+
+policy:
+  allow_implicit_invocation: true

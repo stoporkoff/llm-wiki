@@ -1,0 +1,7 @@
+interface:
+  display_name: "Wiki Tabular Source"
+  short_description: "Extract tables with precise source locations"
+  default_prompt: "Use $wiki-tabular-source to extract this table for the file-based wiki."
+
+policy:
+  allow_implicit_invocation: true
