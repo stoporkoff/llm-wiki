@@ -10,9 +10,13 @@ dist/
 build/
 *.egg-info/
 .idea/
+.env
+.env.*
+!.env.example
 raw/*
 !raw/.gitkeep
 graph/*
 !graph/.gitkeep
 .llm-wiki/state.json
 .llm-wiki/cache/
+.factory/

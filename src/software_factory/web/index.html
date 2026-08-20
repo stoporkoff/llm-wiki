@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="dark">
+    <title>LLM Wiki Software Factory</title>
+    <link rel="stylesheet" href="/assets/styles.css">
+  </head>
+  <body>
+    <div class="ambient ambient-one"></div>
+    <div class="ambient ambient-two"></div>
+    <main class="shell">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">Local multi-agent delivery</p>
+          <h1>Software Factory</h1>
+          <p class="lede">Describe an outcome. Specialists build in parallel, QA and Security
+            validate, and approved work becomes a scored reusable tool.</p>
+        </div>
+        <div id="health" class="health"><span></span> Connecting</div>
+      </header>
+
+      <section class="panel request-panel">
+        <form id="task-form">
+          <label for="goal">What should the team build?</label>
+          <textarea id="goal" name="goal" rows="4" required minlength="3"
+            placeholder="Create a polished Hello World page with accessible HTML and responsive styling."></textarea>
+          <div class="form-row">
+            <p>The API key stays on the backend. Generated files remain in a session workspace.</p>
+            <button id="submit" type="submit">Start delivery <span>→</span></button>
+          </div>
+        </form>
+      </section>
+
+      <section class="panel knowledge-panel">
+        <div>
+          <p class="eyebrow">Prompt knowledge</p>
+          <h2>Add an agent prompt</h2>
+          <p class="panel-copy">Upload English Markdown or text. The original becomes an immutable
+            source and the wiki receives evidence anchors automatically.</p>
+        </div>
+        <form id="source-form" class="source-form">
+          <input id="source-file" name="source" type="file" accept=".md,.markdown,.txt,text/markdown,text/plain" required>
+          <button id="source-submit" type="submit">Ingest source</button>
+        </form>
+        <p id="source-status" class="source-status">Checking wiki status...</p>
+      </section>
+
+      <section id="workspace" class="workspace hidden" aria-live="polite">
+        <div class="panel status-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Workflow</p>
+              <h2 id="session-title">Active session</h2>
+            </div>
+            <span id="state-badge" class="state-badge">created</span>
+          </div>
+          <div id="steps" class="steps"></div>
+          <div class="observability-links">
+            <a href="http://localhost:16686" target="_blank" rel="noreferrer">Open traces</a>
+            <a href="http://localhost:3000" target="_blank" rel="noreferrer">Open metrics</a>
+            <a id="artifact-link" href="#">Download session YAML</a>
+            <a id="preview-link" class="hidden" href="#" target="_blank">Open generated project</a>
+          </div>
+        </div>
+
+        <div class="content-grid">
+          <section class="panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Live activity</p>
+                <h2>Agent timeline</h2>
+              </div>
+            </div>
+            <ol id="events" class="events"></ol>
+          </section>
+
+          <aside class="side-stack">
+            <section class="panel">
+              <p class="eyebrow">Team</p>
+              <div id="agents" class="agent-list"></div>
+            </section>
+            <section class="panel">
+              <p class="eyebrow">Artifacts</p>
+              <ul id="files" class="file-list"><li>No files yet</li></ul>
+            </section>
+            <section class="panel">
+              <p class="eyebrow">Evaluation</p>
+              <button id="compare-runs" class="secondary" type="button">Compare latest runs</button>
+              <div id="comparison" class="comparison">Complete two sessions to compare them.</div>
+            </section>
+          </aside>
+        </div>
+
+        <section id="result-panel" class="panel result-panel hidden">
+          <p class="eyebrow">Delivery result</p>
+          <div id="scorecard" class="scorecard"></div>
+          <pre id="result"></pre>
+        </section>
+      </section>
+    </main>
+    <script src="/assets/app.js" defer></script>
+  </body>
+</html>

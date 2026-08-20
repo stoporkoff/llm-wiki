@@ -10,7 +10,7 @@ readme = "README.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.12"
 authors = [{ name = "LLM Wiki contributors" }]
-dependencies = []
+dependencies = ["PyYAML>=6.0,<7"]
 
 [project.optional-dependencies]
 converters = [
@@ -24,13 +24,24 @@ dev = [
   "pytest>=8.4,<9",
   "pytest-cov>=6.2,<7",
   "ruff>=0.12,<1",
+  "types-PyYAML>=6.0,<7",
+]
+factory = [
+  "fastapi>=0.116,<1",
+  "openai>=2.53,<3",
+  "opentelemetry-api>=1.36,<2",
+  "opentelemetry-exporter-otlp-proto-http>=1.36,<2",
+  "opentelemetry-sdk>=1.36,<2",
+  "python-multipart>=0.0.20,<1",
+  "uvicorn[standard]>=0.35,<1",
 ]
 
 [project.scripts]
 llm-wiki = "llm_wiki.cli:main"
+llm-wiki-factory = "software_factory.__main__:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/llm_wiki"]
+packages = ["src/llm_wiki", "src/software_factory"]
 
 [tool.pytest.ini_options]
 addopts = "-q --cov=llm_wiki --cov-report=term-missing"

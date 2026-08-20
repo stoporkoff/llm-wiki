@@ -1,5 +1,44 @@
 # LLM Wiki
 
+> **New PoC:** this repository also contains a local, OpenAI-powered multi-agent Software Factory.
+> It runs delivery through an explicit FSM, executes specialists concurrently, visualizes evidence,
+> scores the result, and publishes approved artifacts as reusable tools.
+
+## Software Factory quick start
+
+```powershell
+Copy-Item .env.example .env
+# Set OPENAI_API_KEY in .env
+.\scripts\start-factory.ps1 -Build
+```
+
+Open `http://localhost:8000` and submit:
+
+```text
+Create an accessible Hello World page that runs locally without external dependencies.
+```
+
+The local stack includes the Factory UI (`:8000`), Jaeger v2 (`:16686`), Grafana (`:3000`), and
+Prometheus (`:9090`). See [Software Factory Architecture](docs/architecture.md),
+[FSM and Agents](docs/fsm-and-agents.md), [Reusable Tools](docs/reusable-tools.md),
+[Observability and Scoring](docs/observability-and-scoring.md), and
+[Local Factory Development](docs/factory-local-development.md). Run details are defined by the
+[Session Artifact Specification](docs/session-artifact.md), while uploaded prompt documents follow
+[Prompt Source Ingestion](docs/prompt-ingestion.md).
+
+After all gates pass, the UI exposes the generated frontend at a session-specific localhost preview
+URL. The delivery also includes `deploy/compose.yaml` and Docker assets for running the exported
+project independently. Upload-ready general prompts are available in [`prompt_library/`](prompt_library/README.md).
+
+```mermaid
+flowchart LR
+  Goal --> Discovery --> Planning --> Build[Parallel build]
+  Build --> Verify[QA + Security]
+  Verify --> Review --> Package[Score + reusable tool]
+```
+
+## File wiki
+
 LLM Wiki is a repository-scoped agent skill that turns source files into a persistent,
 interlinked, evidence-backed Markdown wiki. It follows the compile-on-ingest pattern: knowledge is
 integrated once, maintained across sessions, and queried from the accumulated wiki.
@@ -11,6 +50,8 @@ search, and validation without making semantic decisions.
 
 See the [architecture guide](docs/architecture.md) for system boundaries, ingestion and query
 sequences, the persistence model, trust boundaries, Docker deployment, and extension points.
+Use the [local testing guide](docs/local-testing.md) for a complete Docker smoke test, first ingest,
+cited query, contradiction review, and source-skill routing exercise.
 
 ## Workspace
 
