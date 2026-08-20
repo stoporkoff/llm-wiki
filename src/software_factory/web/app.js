@@ -78,7 +78,9 @@ async function poll(sessionId) {
       <strong>${Math.round(item.score * 100)}%</strong></div>`).join("");
     elements.result.textContent = session.error || JSON.stringify(session.result, null, 2);
     if (session.result?.preview_url) {
-      elements["preview-link"].href = session.result.preview_url;
+      elements["preview-link"].href = new URL(
+        session.result.preview_url, window.location.origin
+      ).href;
       elements["preview-link"].classList.remove("hidden");
     }
   }
@@ -112,6 +114,14 @@ elements["task-form"].addEventListener("submit", async (event) => {
     eventStream.close();
     if (!pollTimer) pollTimer = setInterval(() => poll(session.id), 1200);
   };
+});
+
+elements["preview-link"].addEventListener("click", (event) => {
+  event.preventDefault();
+  const target = elements["preview-link"].href;
+  if (target && target !== `${window.location.origin}/#`) {
+    window.location.assign(target);
+  }
 });
 
 async function refreshWikiStatus() {
