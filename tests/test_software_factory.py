@@ -141,6 +141,9 @@ def test_workflow_publishes_trusted_reusable_tool(tmp_path: Path) -> None:
 
 
 class BlockedQAGateway(FakeAgentGateway):
+    def __init__(self) -> None:
+        self.qa_runs = 0
+
     async def run(
         self,
         spec: AgentSpec,
@@ -150,6 +153,7 @@ class BlockedQAGateway(FakeAgentGateway):
     ) -> AgentRunResult:
         result = await super().run(spec, instruction, workspace, session_id)
         if spec.id == "qa-engineer":
+            self.qa_runs += 1
             return AgentRunResult("QA BLOCKED\nVitest is unavailable.")
         return result
 
@@ -170,13 +174,65 @@ def test_verification_fails_closed_before_final_review(tmp_path: Path) -> None:
     failed = asyncio.run(orchestrator.run(created.id))
 
     assert failed.state is WorkflowState.FAILED
-    assert failed.error == "Verification gate blocked: QA BLOCKED"
+    assert failed.error == "Verification remediation exhausted after 2 attempts: qa:blocked"
     events = repository.events(created.id)
+    assert sum(event["kind"] == "remediation-started" for event in events) == 2
+    assert any(event["kind"] == "remediation-exhausted" for event in events)
     assert not any(event["actor"] == "reviewer" for event in events)
     assert not any(
         event["kind"] == "stage-completed" and event["message"] == "Verification passed"
         for event in events
     )
+
+
+class RepairableQAGateway(FakeAgentGateway):
+    def __init__(self) -> None:
+        self.qa_runs = 0
+        self.frontend_runs = 0
+
+    async def run(
+        self,
+        spec: AgentSpec,
+        instruction: str,
+        workspace: Path,
+        session_id: str,
+    ) -> AgentRunResult:
+        result = await super().run(spec, instruction, workspace, session_id)
+        if spec.id == "frontend-developer":
+            self.frontend_runs += 1
+        if spec.id == "qa-engineer":
+            self.qa_runs += 1
+            if self.qa_runs == 1:
+                return AgentRunResult("QA BLOCKED\nAdd a frontend test script.")
+        return result
+
+
+def test_verification_routes_blockers_and_passes_after_remediation(tmp_path: Path) -> None:
+    repository = SQLiteSessionRepository(tmp_path / "factory.db")
+    gateway = RepairableQAGateway()
+    orchestrator = SoftwareFactoryOrchestrator(
+        repository,
+        gateway,
+        specs(),
+        tmp_path / "workspaces",
+        ReusableToolStore(tmp_path / "tools"),
+        FactoryTelemetry(),
+        SessionArtifactWriter(tmp_path / "workspaces", "test-model", "medium"),
+    )
+
+    created = orchestrator.create_session("Create a Hello World page")
+    completed = asyncio.run(orchestrator.run(created.id))
+
+    assert completed.state is WorkflowState.COMPLETED
+    assert completed.result is not None
+    assert len(completed.result["remediation"]) == 1
+    assert gateway.qa_runs == 2
+    assert gateway.frontend_runs == 2
+    events = repository.events(created.id)
+    assert any(event["kind"] == "verification-blocked" for event in events)
+    assert any(event["kind"] == "remediation-completed" for event in events)
+    assert any(event["kind"] == "remediation-passed" for event in events)
+    assert any(event["actor"] == "reviewer" for event in events)
 
 
 def test_frontend_tests_reject_floating_dependencies(tmp_path: Path) -> None:

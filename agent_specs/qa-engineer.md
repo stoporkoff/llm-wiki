@@ -20,3 +20,8 @@ The first non-empty line of the final report is a machine-readable gate verdict:
   unavailable.
 
 Never use `QA PASSED` for static inspection alone.
+
+Use every applicable runner available through `run_tests`. Lack of a separate browser runner is not
+by itself a blocker when component tests execute the core interaction behavior and static inspection
+covers responsive and accessibility rules. It remains a blocker when the user explicitly requires
+real-browser/device evidence or when core behavior cannot otherwise be executed.

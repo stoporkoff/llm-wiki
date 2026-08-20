@@ -35,7 +35,9 @@ project independently. Upload-ready general prompts are available in [`prompt_li
 flowchart LR
   Goal --> Discovery --> Planning --> Build[Parallel build]
   Build --> Verify{QA PASSED + Security PASSED?}
-  Verify -->|blocked| Failed
+  Verify -->|blocked| Repair[Bounded remediation]
+  Repair --> Build
+  Repair -->|attempts exhausted| Failed
   Verify -->|passed| Review
   Review --> Package[Score + reusable tool]
 ```

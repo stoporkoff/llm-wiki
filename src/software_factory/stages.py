@@ -17,18 +17,21 @@ from software_factory.domain import (
 from software_factory.planning import ExecutionPlanParser
 
 AgentInvoker = Callable[[str, str], Awaitable[AgentRunResult]]
+StageEventEmitter = Callable[[str, str, str, dict[str, object]], None]
 
 
 @dataclass
 class WorkflowContext:
     session: FactorySession
     invoke: AgentInvoker
+    emit: StageEventEmitter = lambda _kind, _actor, _message, _payload: None
     discovery: str = ""
     architecture: str = ""
     plan: ExecutionPlan | None = None
     implementation: dict[str, str] = field(default_factory=dict)
     release: str = ""
     verification: dict[str, str] = field(default_factory=dict)
+    remediation: list[dict[str, object]] = field(default_factory=list)
     review: str = ""
     tool_contract: dict[str, object] | None = None
     preview_url: str | None = None
@@ -53,6 +56,7 @@ class WorkflowContext:
             "implementation": self.implementation,
             "release": self.release,
             "verification": self.verification,
+            "remediation": self.remediation,
             "review": self.review,
             "tool_contract": self.tool_contract,
             "preview_url": self.preview_url,
@@ -165,22 +169,72 @@ class VerificationStage(WorkflowStage):
     definition = StageDefinition(
         state=WorkflowState.TESTING,
         display_name="Verification",
-        description="Run functional QA and defensive security review concurrently.",
+        description=(
+            "Run QA and security review, route blockers to implementation owners, and retry."
+        ),
         mode=ExecutionMode.PARALLEL,
         agents=("qa-engineer", "security-reviewer"),
         gate=(
             "Runtime evidence exists and both QA PASSED and SECURITY PASSED verdicts "
-            "are present."
+            "are present after at most two bounded remediation attempts."
         ),
     )
 
+    def __init__(self, max_remediation_attempts: int = 2) -> None:
+        if max_remediation_attempts < 0:
+            raise ValueError("max_remediation_attempts must be non-negative")
+        self._max_remediation_attempts = max_remediation_attempts
+
     async def execute(self, context: WorkflowContext) -> None:
+        for attempt in range(self._max_remediation_attempts + 1):
+            qa_output, security_output = await self._verify(context, attempt)
+            context.verification = {"qa": qa_output, "security": security_output}
+            blockers = self._blockers(qa_output, security_output)
+            if not blockers:
+                if attempt:
+                    context.emit(
+                        "remediation-passed",
+                        "orchestrator",
+                        f"Verification passed after remediation attempt {attempt}",
+                        {"attempt": attempt},
+                    )
+                return
+            if attempt >= self._max_remediation_attempts:
+                context.emit(
+                    "remediation-exhausted",
+                    "orchestrator",
+                    "Verification remediation attempts exhausted",
+                    {"attempt": attempt, "blockers": blockers},
+                )
+                raise RuntimeError(
+                    "Verification remediation exhausted after "
+                    f"{self._max_remediation_attempts} attempts: {', '.join(blockers)}"
+                )
+            context.emit(
+                "verification-blocked",
+                "orchestrator",
+                f"Verification blocked; starting remediation attempt {attempt + 1}",
+                {
+                    "attempt": attempt + 1,
+                    "blockers": blockers,
+                    "qa": qa_output,
+                    "security": security_output,
+                },
+            )
+            await self._remediate(
+                context, attempt + 1, blockers, qa_output, security_output
+            )
+
+    async def _verify(
+        self, context: WorkflowContext, attempt: int
+    ) -> tuple[str, str]:
         common = (
             f"User goal:\n{context.session.goal}\n\n"
             f"Discovery brief:\n{context.discovery}\n\n"
             f"Architecture note:\n{context.architecture}\n\n"
             f"Implementation reports:\n{context.implementation}\n\n"
             f"Release report:\n{context.release}\n\n"
+            f"Remediation attempt:\n{attempt}\n\n"
             "Inspect the actual workspace and report evidence. Follow the verdict contract in "
             "your agent specification exactly."
         )
@@ -188,23 +242,97 @@ class VerificationStage(WorkflowStage):
             context.invoke("qa-engineer", common),
             context.invoke("security-reviewer", common),
         )
-        context.verification = {"qa": qa.output, "security": security.output}
-        self._require_verdict(qa.output, "QA PASSED", "QA BLOCKED")
-        self._require_verdict(
-            security.output, "SECURITY PASSED", "SECURITY BLOCKED"
+        return qa.output, security.output
+
+    async def _remediate(
+        self,
+        context: WorkflowContext,
+        attempt: int,
+        blockers: list[str],
+        qa_output: str,
+        security_output: str,
+    ) -> None:
+        if context.plan is None:
+            raise RuntimeError("Verification remediation requires a validated execution plan")
+
+        context.emit(
+            "remediation-started",
+            "orchestrator",
+            f"Remediation attempt {attempt} started",
+            {"attempt": attempt, "blockers": blockers},
+        )
+
+        async def repair(role: str, objective: str) -> tuple[str, str]:
+            result = await context.invoke(
+                role,
+                (
+                    f"User goal:\n{context.session.goal}\n\n"
+                    f"Original assigned objective:\n{objective}\n\n"
+                    f"Current QA report:\n{qa_output}\n\n"
+                    f"Current security report:\n{security_output}\n\n"
+                    f"Remediation attempt: {attempt} of "
+                    f"{self._max_remediation_attempts}.\n\n"
+                    "Inspect the actual workspace. Fix every actionable blocker inside your "
+                    "owned path, including missing tests or scripts, without weakening acceptance "
+                    "criteria. Preserve working behavior and report the exact changes."
+                ),
+            )
+            return role, result.output
+
+        repairs = await asyncio.gather(
+            *(repair(item.role, item.objective) for item in context.plan.tasks)
+        )
+        repair_reports = dict(repairs)
+        context.implementation.update(
+            {f"remediation-{attempt}:{role}": output for role, output in repairs}
+        )
+
+        release = await context.invoke(
+            "infrastructure-engineer",
+            (
+                f"User goal:\n{context.session.goal}\n\n"
+                f"Architecture note:\n{context.architecture}\n\n"
+                f"Remediation reports:\n{repair_reports}\n\n"
+                f"Previous QA report:\n{qa_output}\n\n"
+                f"Previous security report:\n{security_output}\n\n"
+                "Re-inspect the changed project, update deployment assets inside deploy/, and "
+                "ensure the delivery contract builds reproducibly with the repaired workspace."
+            ),
+        )
+        context.release = release.output
+        record = {
+            "attempt": attempt,
+            "blockers": blockers,
+            "repairs": repair_reports,
+            "release": release.output,
+        }
+        context.remediation.append(record)
+        context.emit(
+            "remediation-completed",
+            "orchestrator",
+            f"Remediation attempt {attempt} completed; verification will rerun",
+            record,
         )
 
     @staticmethod
-    def _require_verdict(output: str, passed: str, blocked: str) -> None:
+    def _verdict(output: str, passed: str, blocked: str) -> str:
         first_line = next((line.strip() for line in output.splitlines() if line.strip()), "")
         normalized = first_line.lstrip("#* ").rstrip("* ").upper()
         if normalized.startswith(passed):
-            return
+            return "passed"
         if normalized.startswith(blocked):
-            raise RuntimeError(f"Verification gate blocked: {first_line}")
-        raise RuntimeError(
-            f"Verification gate received no valid verdict; expected {passed} or {blocked}"
-        )
+            return "blocked"
+        return "invalid"
+
+    @classmethod
+    def _blockers(cls, qa_output: str, security_output: str) -> list[str]:
+        verdicts = {
+            "qa": cls._verdict(qa_output, "QA PASSED", "QA BLOCKED"),
+            "security": cls._verdict(
+                security_output, "SECURITY PASSED", "SECURITY BLOCKED"
+            ),
+        }
+        return [f"{name}:{verdict}" for name, verdict in verdicts.items() if verdict != "passed"]
 
 
 class ReleaseEngineeringStage(WorkflowStage):

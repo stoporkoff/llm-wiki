@@ -16,7 +16,7 @@ COPY pyproject.toml README.md LICENSE ./
 COPY src ./src
 COPY agent_specs ./agent_specs
 COPY wiki ./wiki
-RUN python -m pip install ".[factory]"
+RUN python -m pip install ".[factory,dev]"
 
 EXPOSE 8000
 CMD ["llm-wiki-factory"]

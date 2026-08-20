@@ -70,9 +70,27 @@ be one of the following values:
 | QA Engineer | `QA PASSED` | `QA BLOCKED` |
 | Security Reviewer | `SECURITY PASSED` | `SECURITY BLOCKED` |
 
-A missing, malformed, or blocked verdict raises inside the Verification stage. The stage does not
-emit `stage-completed`, and the final reviewer is not invoked. Static inspection cannot produce
-`QA PASSED` when runtime evidence is required.
+A missing, malformed, or blocked verdict prevents the Verification stage from passing. The stage
+does not immediately proceed to final review. Instead, it emits the blocker reports, invokes every planned
+implementation owner with the QA and Security evidence, reruns Release Engineering, and repeats
+Verification. The loop allows two remediation attempts. If both attempts remain blocked, the
+session fails and the final reviewer is not invoked. Static inspection cannot produce `QA PASSED`
+when runtime evidence is required.
+
+```mermaid
+flowchart LR
+  V[QA + Security] --> G{Both passed?}
+  G -->|yes| R[Final Review]
+  G -->|no| B[Publish blocker reports]
+  B --> O[Route to implementation owners]
+  O --> D[Refresh deployment]
+  D --> V
+  B -->|attempt limit reached| F[Failed]
+```
+
+The timeline records `verification-blocked`, `remediation-started`, `remediation-completed`,
+`remediation-passed`, and `remediation-exhausted` events. The UI exposes the full QA and Security
+reports on each blocked attempt.
 
 ## Prompt Contract
 

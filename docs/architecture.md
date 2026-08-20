@@ -165,7 +165,9 @@ Model output is never trusted merely because it is well formatted. Tool inputs a
 paths stay beneath a session workspace, sensitive names are blocked, writers have role ownership,
 reviewers fail closed, and reusable status requires deterministic hard gates. Verification is also
 machine-gated: QA and Security must emit explicit pass verdicts as their first non-empty lines. A
-blocked or missing verdict fails the session before final review.
+blocked or missing verdict enters a bounded remediation loop before final review. The loop sends
+both reports to the implementation roles selected by the original plan, refreshes the release
+contract, and reruns verification. It fails closed after two unsuccessful repair attempts.
 
 For JavaScript frontends, runtime verification rejects floating `latest` versions, preserves a
 generated lockfile when needed, installs with `npm ci --ignore-scripts`, and removes only transient

@@ -14,5 +14,8 @@ When JavaScript dependencies are required, use explicit compatible versions rath
 Create a conventional `package.json`; the QA test tool will create and preserve `package-lock.json`
 before running the suite when no lockfile exists. Never weaken or skip tests to avoid dependency
 setup.
+For framework-based frontends, always add an executable `test` script and focused component tests
+inside `frontend/`. Cover rendering, primary interactions, validation, accessible names, and loading
+or disabled states that are part of the acceptance criteria.
 Inspect existing files before replacing them. Use `write_file` for every change and finish with a
 concise report of files changed and acceptance criteria satisfied. Do not write outside `frontend/`.

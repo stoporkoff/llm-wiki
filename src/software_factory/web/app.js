@@ -40,6 +40,10 @@ function renderEvents(events) {
   elements.events.innerHTML = events.map((event) => `
     <li class="event"><div><strong>${escapeHtml(agentNames[event.actor] || event.actor)}</strong>
     &mdash; ${escapeHtml(event.message)}<time>${new Date(event.created_at).toLocaleTimeString()}</time>
+    ${event.kind === "verification-blocked" ? `<details class="blocker-report">
+      <summary>Show blocker reports</summary>
+      <pre>${escapeHtml(`QA\n${event.payload.qa}\n\nSecurity\n${event.payload.security}`)}</pre>
+    </details>` : ""}
     </div></li>`).join("");
   const statuses = new Map();
   for (const event of events) {

@@ -57,8 +57,11 @@ bundling fails. It never silently serves a source `index.html` that still refere
 ## Verification Failure Semantics
 
 QA must start its report with `QA PASSED` or `QA BLOCKED`; Security must start with
-`SECURITY PASSED` or `SECURITY BLOCKED`. A blocked or malformed verdict stops the workflow in the
-`testing` state transition and prevents final review. This contract is covered by a regression test.
+`SECURITY PASSED` or `SECURITY BLOCKED`. A blocked or malformed verdict keeps the workflow in
+`testing`, publishes the reports in the timeline, and starts bounded remediation. Planned
+implementation owners receive the reports, Release Engineering refreshes deployment assets, and QA
+plus Security run again. Two failed remediation attempts stop the session and prevent final review.
+Regression tests cover both successful self-repair and exhausted retry behavior.
 
 ## OpenAI Key
 

@@ -73,7 +73,13 @@ class SoftwareFactoryOrchestrator:
         async def invoke(agent_id: str, instruction: str) -> AgentRunResult:
             return await self._run_agent(session, agent_id, instruction, workspace)
 
-        context = WorkflowContext(session=session, invoke=invoke)
+        context = WorkflowContext(
+            session=session,
+            invoke=invoke,
+            emit=lambda kind, actor, message, payload: self._event(
+                session.id, kind, actor, message, payload
+            ),
+        )
         with self._telemetry.span("factory.workflow", {"session.id": session.id}):
             try:
                 for stage in self._pipeline.stages:
