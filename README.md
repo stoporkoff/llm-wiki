@@ -5,12 +5,6 @@ delivery workflow, runs specialist agents, requires runtime and security evidenc
 observability, and publishes only approved artifacts as reusable tools. The repository also contains
 the file-first LLM Wiki used as an evidence source for delivery decisions.
 
-For an overview suitable for product and engineering discussion, open the
-[SDLC brainstorm deck](docs/SDLC-brainstorm.pptx) and its editable
-[brainstorm brief](docs/brainstorm-brief.md).
-
-![SDLC multi-agent delivery flow](docs/assets/sdlc-factory-hero.png)
-
 ## Software Factory quick start
 
 ```powershell

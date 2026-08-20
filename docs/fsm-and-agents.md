@@ -1,7 +1,5 @@
 # FSM and Agent Network
 
-![SDLC fail-closed quality gates](assets/sdlc-quality-gates.png)
-
 ```mermaid
 stateDiagram-v2
   [*] --> created
