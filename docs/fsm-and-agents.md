@@ -1,5 +1,7 @@
 # FSM and Agent Network
 
+![SDLC fail-closed quality gates](assets/sdlc-quality-gates.png)
+
 ```mermaid
 stateDiagram-v2
   [*] --> created
@@ -34,7 +36,7 @@ to `failed`; no stage is silently skipped and no failed session publishes a trus
 | planning | Architect then Team Lead | Valid plan with supported roles |
 | implementing | Selected developers in parallel | Owned artifacts and reports |
 | releasing | Infrastructure Engineer | Docker and preview manifests |
-| testing | QA and Security in parallel | Test evidence and no critical finding |
+| testing | QA and Security in parallel | Explicit `QA PASSED` and `SECURITY PASSED` verdicts |
 | reviewing | Delivery Reviewer | Verdict begins with `APPROVED` |
 | packaging | Tool Curator | Strict reuse contract |
 | previewing | Release Manager | Verified localhost preview URL |
@@ -59,6 +61,20 @@ flowchart TB
 
 Agents do not hand control to one another. The orchestrator retains state, composition, failure
 semantics, and the final result while specialists keep focused context and tools.
+
+## Verification Verdict Contract
+
+QA and Security reports are both human-readable and machine-gated. Their first non-empty lines must
+be one of the following values:
+
+| Agent | Pass | Stop |
+| --- | --- | --- |
+| QA Engineer | `QA PASSED` | `QA BLOCKED` |
+| Security Reviewer | `SECURITY PASSED` | `SECURITY BLOCKED` |
+
+A missing, malformed, or blocked verdict raises inside the Verification stage. The stage does not
+emit `stage-completed`, and the final reviewer is not invoked. Static inspection cannot produce
+`QA PASSED` when runtime evidence is required.
 
 ## Prompt Contract
 

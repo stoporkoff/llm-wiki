@@ -56,14 +56,28 @@ async def prepare_frontend_preview(workspace: Path, manifest_path: Path) -> dict
             **package.get("dependencies", {}),
             **package.get("devDependencies", {}),
         }
-        install_command = [
-            "npm",
-            "install",
-            "--ignore-scripts",
-            "--no-audit",
-            "--no-fund",
-            "--package-lock=false",
-        ]
+        floating = sorted(name for name, version in dependencies.items() if version == "latest")
+        if floating:
+            raise ToolError(
+                "Floating `latest` dependencies are not allowed: " + ", ".join(floating)
+            )
+        lockfile = frontend_directory / "package-lock.json"
+        if not lockfile.is_file():
+            lock_code, lock_output = await _run_bounded_command(
+                [
+                    "npm",
+                    "install",
+                    "--ignore-scripts",
+                    "--no-audit",
+                    "--no-fund",
+                    "--package-lock-only",
+                ],
+                frontend_directory,
+                240,
+            )
+            if lock_code != 0:
+                raise ToolError(f"Frontend lockfile generation failed:\n{lock_output}")
+        install_command = ["npm", "ci", "--ignore-scripts", "--no-audit", "--no-fund"]
         install_code, install_output = await _run_bounded_command(
             install_command, frontend_directory, 240
         )
@@ -244,13 +258,79 @@ class RunTestsTool(FactoryTool):
 
     async def execute(self, arguments: dict[str, Any], context: ToolContext) -> dict[str, Any]:
         suite = str(arguments["suite"])
-        commands = {
-            "python": [os.environ.get("PYTHON", "python"), "-m", "pytest", "-q"],
-            "frontend": ["npm", "test", "--", "--run"],
+        if suite == "python":
+            exit_code, output = await _run_bounded_command(
+                [os.environ.get("PYTHON", "python"), "-m", "pytest", "-q"],
+                context.workspace,
+                120,
+            )
+            return {"exit_code": exit_code, "output": output}
+
+        frontend = context.workspace / "frontend"
+        package_path = frontend / "package.json"
+        if not package_path.is_file():
+            return {"exit_code": 2, "output": "frontend/package.json does not exist"}
+
+        package = json.loads(package_path.read_text(encoding="utf-8"))
+        dependencies = {
+            **package.get("dependencies", {}),
+            **package.get("devDependencies", {}),
         }
-        cwd = context.workspace / "frontend" if suite == "frontend" else context.workspace
-        exit_code, output = await _run_bounded_command(commands[suite], cwd, 120)
-        return {"exit_code": exit_code, "output": output}
+        floating = sorted(name for name, version in dependencies.items() if version == "latest")
+        if floating:
+            return {
+                "exit_code": 2,
+                "output": "Floating `latest` dependencies are not allowed: "
+                + ", ".join(floating),
+            }
+
+        lockfile = frontend / "package-lock.json"
+        install_command = (
+            ["npm", "ci", "--ignore-scripts", "--no-audit", "--no-fund"]
+            if lockfile.is_file()
+            else [
+                "npm",
+                "install",
+                "--ignore-scripts",
+                "--no-audit",
+                "--no-fund",
+                "--package-lock-only",
+            ]
+        )
+        install_code, install_output = await _run_bounded_command(
+            install_command, frontend, 240
+        )
+        if install_code != 0:
+            return {
+                "exit_code": install_code,
+                "output": f"Frontend dependency preparation failed:\n{install_output}",
+            }
+        if not lockfile.is_file():
+            return {"exit_code": 2, "output": "npm did not create package-lock.json"}
+
+        if install_command[1] == "install":
+            install_code, install_output = await _run_bounded_command(
+                ["npm", "ci", "--ignore-scripts", "--no-audit", "--no-fund"],
+                frontend,
+                240,
+            )
+            if install_code != 0:
+                return {
+                    "exit_code": install_code,
+                    "output": f"Frontend dependency installation failed:\n{install_output}",
+                }
+
+        try:
+            exit_code, output = await _run_bounded_command(
+                ["npm", "test", "--", "--run"], frontend, 120
+            )
+        finally:
+            shutil.rmtree(frontend / "node_modules", ignore_errors=True)
+        return {
+            "exit_code": exit_code,
+            "output": output,
+            "lockfile": "frontend/package-lock.json",
+        }
 
 
 class SearchWikiTool(FactoryTool):

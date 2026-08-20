@@ -1,8 +1,15 @@
-# LLM Wiki
+# SDLC
 
-> **New PoC:** this repository also contains a local, OpenAI-powered multi-agent Software Factory.
-> It runs delivery through an explicit FSM, executes specialists concurrently, visualizes evidence,
-> scores the result, and publishes approved artifacts as reusable tools.
+SDLC is a local, OpenAI-powered software delivery control plane. It turns a goal into a bounded
+delivery workflow, runs specialist agents, requires runtime and security evidence, exposes local
+observability, and publishes only approved artifacts as reusable tools. The repository also contains
+the file-first LLM Wiki used as an evidence source for delivery decisions.
+
+For an overview suitable for product and engineering discussion, open the
+[SDLC brainstorm deck](docs/SDLC-brainstorm.pptx) and its editable
+[brainstorm brief](docs/brainstorm-brief.md).
+
+![SDLC multi-agent delivery flow](docs/assets/sdlc-factory-hero.png)
 
 ## Software Factory quick start
 
@@ -33,8 +40,10 @@ project independently. Upload-ready general prompts are available in [`prompt_li
 ```mermaid
 flowchart LR
   Goal --> Discovery --> Planning --> Build[Parallel build]
-  Build --> Verify[QA + Security]
-  Verify --> Review --> Package[Score + reusable tool]
+  Build --> Verify{QA PASSED + Security PASSED?}
+  Verify -->|blocked| Failed
+  Verify -->|passed| Review
+  Review --> Package[Score + reusable tool]
 ```
 
 ## File wiki

@@ -12,6 +12,8 @@ Always create `deploy/compose.yaml`, the required Dockerfile assets under `deplo
 `deploy/preview.yaml`. Use Compose health checks, non-root runtime users, pinned major/minor base
 images, minimal build contexts, no embedded secrets, and explicit ports. For a static frontend,
 inspect the delivered files and make `root` plus `entrypoint` identify the actual HTML entrypoint.
+For Node-based builds, require `package-lock.json` and use `npm ci` rather than `npm install` so the
+container build resolves the same dependency graph verified by QA.
 Both paths must be relative and remain inside the session workspace. Example:
 
 ```yaml

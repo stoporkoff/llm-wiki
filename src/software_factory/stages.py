@@ -168,7 +168,10 @@ class VerificationStage(WorkflowStage):
         description="Run functional QA and defensive security review concurrently.",
         mode=ExecutionMode.PARALLEL,
         agents=("qa-engineer", "security-reviewer"),
-        gate="Test evidence exists and no unresolved critical security finding remains.",
+        gate=(
+            "Runtime evidence exists and both QA PASSED and SECURITY PASSED verdicts "
+            "are present."
+        ),
     )
 
     async def execute(self, context: WorkflowContext) -> None:
@@ -178,13 +181,30 @@ class VerificationStage(WorkflowStage):
             f"Architecture note:\n{context.architecture}\n\n"
             f"Implementation reports:\n{context.implementation}\n\n"
             f"Release report:\n{context.release}\n\n"
-            "Inspect the actual workspace and report evidence."
+            "Inspect the actual workspace and report evidence. Follow the verdict contract in "
+            "your agent specification exactly."
         )
         qa, security = await asyncio.gather(
             context.invoke("qa-engineer", common),
             context.invoke("security-reviewer", common),
         )
         context.verification = {"qa": qa.output, "security": security.output}
+        self._require_verdict(qa.output, "QA PASSED", "QA BLOCKED")
+        self._require_verdict(
+            security.output, "SECURITY PASSED", "SECURITY BLOCKED"
+        )
+
+    @staticmethod
+    def _require_verdict(output: str, passed: str, blocked: str) -> None:
+        first_line = next((line.strip() for line in output.splitlines() if line.strip()), "")
+        normalized = first_line.lstrip("#* ").rstrip("* ").upper()
+        if normalized.startswith(passed):
+            return
+        if normalized.startswith(blocked):
+            raise RuntimeError(f"Verification gate blocked: {first_line}")
+        raise RuntimeError(
+            f"Verification gate received no valid verdict; expected {passed} or {blocked}"
+        )
 
 
 class ReleaseEngineeringStage(WorkflowStage):

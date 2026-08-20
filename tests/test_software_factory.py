@@ -10,7 +10,7 @@ from software_factory.repository import SQLiteSessionRepository
 from software_factory.session_artifact import SessionArtifactWriter
 from software_factory.telemetry import FactoryTelemetry
 from software_factory.tool_store import ReusableToolStore
-from software_factory.tools import ToolContext, ToolRegistry, prepare_frontend_preview
+from software_factory.tools import RunTestsTool, ToolContext, ToolRegistry, prepare_frontend_preview
 from software_factory.wiki_ingestion import PromptWikiIngestionService
 
 
@@ -39,8 +39,8 @@ class FakeAgentGateway:
             ),
             "frontend-developer": "Created frontend/index.html.",
             "infrastructure-engineer": "Created Docker delivery assets.",
-            "qa-engineer": "All tests passed with exit code 0.",
-            "security-reviewer": "NO CRITICAL FINDINGS",
+            "qa-engineer": "QA PASSED\nAll tests passed with exit code 0.",
+            "security-reviewer": "SECURITY PASSED\nNO CRITICAL FINDINGS",
             "reviewer": "APPROVED: page and tests inspected.",
             "tool-curator": json.dumps(
                 {
@@ -138,6 +138,71 @@ def test_workflow_publishes_trusted_reusable_tool(tmp_path: Path) -> None:
         )
     )
     assert json.loads(preview)["result"]["ready"] is True
+
+
+class BlockedQAGateway(FakeAgentGateway):
+    async def run(
+        self,
+        spec: AgentSpec,
+        instruction: str,
+        workspace: Path,
+        session_id: str,
+    ) -> AgentRunResult:
+        result = await super().run(spec, instruction, workspace, session_id)
+        if spec.id == "qa-engineer":
+            return AgentRunResult("QA BLOCKED\nVitest is unavailable.")
+        return result
+
+
+def test_verification_fails_closed_before_final_review(tmp_path: Path) -> None:
+    repository = SQLiteSessionRepository(tmp_path / "factory.db")
+    orchestrator = SoftwareFactoryOrchestrator(
+        repository,
+        BlockedQAGateway(),
+        specs(),
+        tmp_path / "workspaces",
+        ReusableToolStore(tmp_path / "tools"),
+        FactoryTelemetry(),
+        SessionArtifactWriter(tmp_path / "workspaces", "test-model", "medium"),
+    )
+
+    created = orchestrator.create_session("Create a Hello World page")
+    failed = asyncio.run(orchestrator.run(created.id))
+
+    assert failed.state is WorkflowState.FAILED
+    assert failed.error == "Verification gate blocked: QA BLOCKED"
+    events = repository.events(created.id)
+    assert not any(event["actor"] == "reviewer" for event in events)
+    assert not any(
+        event["kind"] == "stage-completed" and event["message"] == "Verification passed"
+        for event in events
+    )
+
+
+def test_frontend_tests_reject_floating_dependencies(tmp_path: Path) -> None:
+    frontend = tmp_path / "frontend"
+    frontend.mkdir()
+    (frontend / "package.json").write_text(
+        json.dumps(
+            {
+                "scripts": {"test": "vitest run"},
+                "devDependencies": {"vitest": "latest"},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = asyncio.run(
+        RunTestsTool().execute(
+            {"suite": "frontend"},
+            ToolContext(tmp_path, "qa-engineer", "test-session"),
+        )
+    )
+
+    assert result == {
+        "exit_code": 2,
+        "output": "Floating `latest` dependencies are not allowed: vitest",
+    }
 
 
 def test_prompt_ingestion_creates_immutable_evidence_page(tmp_path: Path) -> None:

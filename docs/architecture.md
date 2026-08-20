@@ -163,7 +163,13 @@ flowchart LR
 
 Model output is never trusted merely because it is well formatted. Tool inputs are schema-bound,
 paths stay beneath a session workspace, sensitive names are blocked, writers have role ownership,
-reviewers fail closed, and reusable status requires deterministic hard gates.
+reviewers fail closed, and reusable status requires deterministic hard gates. Verification is also
+machine-gated: QA and Security must emit explicit pass verdicts as their first non-empty lines. A
+blocked or missing verdict fails the session before final review.
+
+For JavaScript frontends, runtime verification rejects floating `latest` versions, preserves a
+generated lockfile when needed, installs with `npm ci --ignore-scripts`, and removes only transient
+`node_modules` after execution. The same lockfile is reused by the preview build.
 
 ## Persistence
 

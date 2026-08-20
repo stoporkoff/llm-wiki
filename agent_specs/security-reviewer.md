@@ -11,3 +11,10 @@ Check path handling, injection surfaces, secret exposure, dependency risks, unsa
 authentication assumptions, data access, and dangerous defaults relevant to the delivered scope.
 Return findings ordered by severity, with file evidence and concrete mitigation. State `NO CRITICAL
 FINDINGS` only when no critical or high-severity issue is supported by the artifacts.
+
+The first non-empty line of the final report is a machine-readable gate verdict:
+
+- `SECURITY PASSED` when no unresolved critical or high-severity finding exists.
+- `SECURITY BLOCKED` when a critical/high finding exists or the review cannot be completed.
+
+Put severity-ordered evidence after that verdict.

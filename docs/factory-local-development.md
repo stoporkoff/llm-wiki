@@ -41,13 +41,24 @@ Generated workspaces use `.factory/workspaces/<session-id>/`. Reusable versions 
 
 ## Generated Preview
 
+Frontend dependency preparation now happens before the QA suite. Floating `latest` versions are
+rejected. If `package-lock.json` is missing, the test tool creates and preserves it, installs the
+locked graph with `npm ci --ignore-scripts`, runs the configured suite, and removes transient
+`node_modules`. This makes the reviewed dependency graph part of the exported delivery.
+
 `Open generated project` serves static HTML directly. When a session contains a Vite project, the
-preview gate installs its declared frontend dependencies, runs a production Vite bundle with a
-relative asset base, removes temporary `node_modules`, and serves `frontend/dist`. The first open
-can take longer because packages must be downloaded; later opens reuse the compiled output.
+preview gate reuses the lockfile, runs a production Vite bundle with a relative asset base, removes
+temporary `node_modules`, and serves `frontend/dist`. The first run can take longer because packages
+must be downloaded; later preview opens reuse the compiled output.
 
 The preview returns HTTP `503` with the bounded build output when dependency installation or
 bundling fails. It never silently serves a source `index.html` that still references TSX files.
+
+## Verification Failure Semantics
+
+QA must start its report with `QA PASSED` or `QA BLOCKED`; Security must start with
+`SECURITY PASSED` or `SECURITY BLOCKED`. A blocked or malformed verdict stops the workflow in the
+`testing` state transition and prevents final review. This contract is covered by a regression test.
 
 ## OpenAI Key
 
