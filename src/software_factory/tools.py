@@ -4,6 +4,7 @@ import asyncio
 import json
 import os
 import re
+import shutil
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
@@ -18,6 +19,80 @@ from software_factory.tool_store import ReusableToolStore
 
 class ToolError(RuntimeError):
     pass
+
+
+async def _run_bounded_command(
+    command: list[str], cwd: Path, timeout_seconds: int
+) -> tuple[int, str]:
+    process = await asyncio.create_subprocess_exec(
+        *command,
+        cwd=cwd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.STDOUT,
+    )
+    try:
+        output_bytes, _ = await asyncio.wait_for(
+            process.communicate(), timeout=timeout_seconds
+        )
+    except TimeoutError:
+        process.kill()
+        await process.wait()
+        return 124, f"Command timed out after {timeout_seconds} seconds."
+    return process.returncode or 0, output_bytes.decode(errors="replace")[-20_000:]
+
+
+async def prepare_frontend_preview(workspace: Path, manifest_path: Path) -> dict[str, str]:
+    manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+    spec = manifest.get("spec") if isinstance(manifest, dict) else None
+    if not isinstance(spec, dict):
+        raise ToolError("Preview manifest spec must be an object")
+
+    frontend_directory = workspace / "frontend"
+    package_path = frontend_directory / "package.json"
+    build_output = frontend_directory / "dist" / "index.html"
+    if package_path.is_file() and not build_output.is_file():
+        package = json.loads(package_path.read_text(encoding="utf-8"))
+        dependencies = {
+            **package.get("dependencies", {}),
+            **package.get("devDependencies", {}),
+        }
+        install_command = [
+            "npm",
+            "install",
+            "--ignore-scripts",
+            "--no-audit",
+            "--no-fund",
+            "--package-lock=false",
+        ]
+        install_code, install_output = await _run_bounded_command(
+            install_command, frontend_directory, 240
+        )
+        if install_code != 0:
+            raise ToolError(f"Frontend dependency installation failed:\n{install_output}")
+        if "vite" in dependencies:
+            build_command = ["npx", "--no-install", "vite", "build", "--base=./"]
+        else:
+            build_command = ["npm", "run", "build"]
+        try:
+            build_code, build_log = await _run_bounded_command(
+                build_command, frontend_directory, 240
+            )
+        finally:
+            shutil.rmtree(frontend_directory / "node_modules", ignore_errors=True)
+        if build_code != 0:
+            raise ToolError(f"Frontend production build failed:\n{build_log}")
+        if not build_output.is_file():
+            raise ToolError("Frontend build completed without frontend/dist/index.html")
+
+    if build_output.is_file():
+        spec["root"] = "frontend/dist"
+        spec["entrypoint"] = "index.html"
+        manifest_path.write_text(
+            yaml.safe_dump(manifest, sort_keys=False, allow_unicode=True),
+            encoding="utf-8",
+            newline="\n",
+        )
+    return {"root": str(spec.get("root", "")), "entrypoint": str(spec.get("entrypoint", ""))}
 
 
 @dataclass(frozen=True)
@@ -173,20 +248,9 @@ class RunTestsTool(FactoryTool):
             "python": [os.environ.get("PYTHON", "python"), "-m", "pytest", "-q"],
             "frontend": ["npm", "test", "--", "--run"],
         }
-        process = await asyncio.create_subprocess_exec(
-            *commands[suite],
-            cwd=context.workspace,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT,
-        )
-        try:
-            output_bytes, _ = await asyncio.wait_for(process.communicate(), timeout=120)
-        except TimeoutError:
-            process.kill()
-            await process.wait()
-            return {"exit_code": 124, "output": "Test process timed out after 120 seconds."}
-        output = output_bytes.decode(errors="replace")[-20_000:]
-        return {"exit_code": process.returncode, "output": output}
+        cwd = context.workspace / "frontend" if suite == "frontend" else context.workspace
+        exit_code, output = await _run_bounded_command(commands[suite], cwd, 120)
+        return {"exit_code": exit_code, "output": output}
 
 
 class SearchWikiTool(FactoryTool):
@@ -322,8 +386,9 @@ class StartPreviewTool(FactoryTool):
         spec = manifest.get("spec")
         if not isinstance(spec, dict):
             raise ToolError("Preview manifest spec must be an object")
-        root = str(spec.get("root", ""))
-        entrypoint = str(spec.get("entrypoint", ""))
+        prepared = await prepare_frontend_preview(context.workspace, manifest_path)
+        root = prepared["root"]
+        entrypoint = prepared["entrypoint"]
         preview_root = (context.workspace / root).resolve()
         preview_entrypoint = (preview_root / entrypoint).resolve()
         workspace = context.workspace.resolve()

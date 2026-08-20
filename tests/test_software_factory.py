@@ -10,7 +10,7 @@ from software_factory.repository import SQLiteSessionRepository
 from software_factory.session_artifact import SessionArtifactWriter
 from software_factory.telemetry import FactoryTelemetry
 from software_factory.tool_store import ReusableToolStore
-from software_factory.tools import ToolContext, ToolRegistry
+from software_factory.tools import ToolContext, ToolRegistry, prepare_frontend_preview
 from software_factory.wiki_ingestion import PromptWikiIngestionService
 
 
@@ -156,3 +156,24 @@ def test_prompt_ingestion_creates_immutable_evidence_page(tmp_path: Path) -> Non
     content = page.read_text(encoding="utf-8")
     assert '<a id="evidence-002"></a>' in content
     assert "Raw location: `raw/" in content
+
+
+def test_prebuilt_frontend_preview_uses_dist_output(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    frontend = workspace / "frontend"
+    deploy = workspace / "deploy"
+    (frontend / "dist").mkdir(parents=True)
+    deploy.mkdir(parents=True)
+    (frontend / "package.json").write_text('{"scripts":{"build":"vite build"}}\n')
+    (frontend / "dist" / "index.html").write_text("<h1>Built</h1>\n")
+    manifest_path = deploy / "preview.yaml"
+    manifest_path.write_text(
+        "apiVersion: factory.llm-wiki.dev/v1alpha1\n"
+        "kind: StaticPreview\n"
+        "spec:\n  root: frontend\n  entrypoint: index.html\n"
+    )
+
+    prepared = asyncio.run(prepare_frontend_preview(workspace, manifest_path))
+
+    assert prepared == {"root": "frontend/dist", "entrypoint": "index.html"}
+    assert "root: frontend/dist" in manifest_path.read_text()

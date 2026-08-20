@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 
 from software_factory.container import ApplicationContainer
 from software_factory.domain import TERMINAL_STATES, WorkflowState
+from software_factory.tools import ToolError, prepare_frontend_preview
 
 
 class CreateSessionRequest(BaseModel):
@@ -174,10 +175,12 @@ def create_app(container: ApplicationContainer | None = None) -> FastAPI:
             raise HTTPException(status_code=409, detail="Preview is not ready")
         workspace = active.orchestrator.workspace(session_id)
         manifest_path = workspace / "deploy" / "preview.yaml"
-        manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
-        spec = manifest["spec"]
-        root = (workspace / str(spec["root"])).resolve()
-        entrypoint = str(spec["entrypoint"])
+        try:
+            prepared = await prepare_frontend_preview(workspace, manifest_path)
+        except (OSError, ValueError, ToolError, json.JSONDecodeError) as error:
+            raise HTTPException(status_code=503, detail=str(error)) from error
+        root = (workspace / prepared["root"]).resolve()
+        entrypoint = prepared["entrypoint"]
         requested_path = asset_path or entrypoint
         target = (root / requested_path).resolve()
         if asset_path and not target.is_file():

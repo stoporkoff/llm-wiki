@@ -39,6 +39,16 @@ Docker stores sessions and tools in `factory-data`. For host-native development 
 Generated workspaces use `.factory/workspaces/<session-id>/`. Reusable versions use
 `.factory/tools/<tool-id>/<version>/`. Do not put secrets in either location.
 
+## Generated Preview
+
+`Open generated project` serves static HTML directly. When a session contains a Vite project, the
+preview gate installs its declared frontend dependencies, runs a production Vite bundle with a
+relative asset base, removes temporary `node_modules`, and serves `frontend/dist`. The first open
+can take longer because packages must be downloaded; later opens reuse the compiled output.
+
+The preview returns HTTP `503` with the bounded build output when dependency installation or
+bundling fails. It never silently serves a source `index.html` that still references TSX files.
+
 ## OpenAI Key
 
 Create `.env` locally from `.env.example` and set `OPENAI_API_KEY`. `.env` is ignored by Git. Never
